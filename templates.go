@@ -19,6 +19,7 @@ type MailTemplate struct {
 	Text    Template
 	Html    Template
 	File    *AttachFile
+	Images  []EmbeddedImage
 }
 
 var NotFoundTemplate = errors.New("template: not found")
@@ -68,8 +69,24 @@ func getTemplate(ctx context.Context, template string, f func(template string, t
 		for k, v := range headers {
 			m.SetHeader(k, v)
 		}
+		if err = m.loadImages(ctx, template); err != nil {
+			return nil, err
+		}
 		return m, nil
 	}
+}
+
+func (mt *MailTemplate) loadImages(ctx context.Context, template string) error {
+	if data, err := tmpl.Search(ctx, template, "embedded_images.json"); err != nil {
+		return err
+	} else if data == nil {
+		return nil
+	} else {
+		images := &EmbeddedImages{}
+		err = json.Unmarshal(data, images)
+		mt.Images = images.Images
+	}
+	return nil
 }
 
 func (mt *MailTemplate) SetHeader(key string, value ...interface{}) *MailTemplate {
@@ -133,6 +150,9 @@ func (mt *MailTemplate) Send(ctx context.Context, variables interface{}, to ...A
 			return err
 		}
 		htmlBody, charset, err = encode(charset, buf.Bytes())
+		if mt.Images != nil {
+			ctx = context.WithValue(ctx, Images, mt.Images)
+		}
 	}
 	if err != nil {
 		return err

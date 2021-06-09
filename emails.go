@@ -229,7 +229,9 @@ func SendHTML(ctx context.Context, charset string, headers map[string]interface{
 			return err
 		}
 	}
-	//m.Embed("")
+	if err = embed(ctx, m); err != nil {
+		return err
+	}
 	m.SetBody("text/html", string(body))
 	if file != nil {
 		m.AttachReader(file.Name, file.Content)
@@ -257,6 +259,9 @@ func SendMultipart(ctx context.Context, charset string, headers map[string]inter
 			return err
 		}
 	}
+	if err = embed(ctx, m); err != nil {
+		return err
+	}
 	m.SetBoundary("aaa")
 	m.AddAlternative("text/plain", string(textBody))
 	m.AddAlternative("text/html", string(htmlBody), mail.SetPartEncoding(mail.QuotedPrintable))
@@ -269,6 +274,21 @@ func SendMultipart(ctx context.Context, charset string, headers map[string]inter
 		d := mail.Dialer{Host: config.Host, Port: config.Port, Username: config.Username, Password: config.Password, TLSConfig: config.TlsConfig}
 		if err := d.DialAndSend(m); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func embed(ctx context.Context, m *mail.Message) error {
+	if v := ctx.Value(Images); v != nil {
+		if images, ok := v.([]EmbeddedImage); ok {
+			for _, img := range images {
+				if r, err := img.Open(); err != nil {
+					return err
+				} else {
+					m.EmbedReader(img.Name, r, img.Settings...)
+				}
+			}
 		}
 	}
 	return nil
